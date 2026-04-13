@@ -1,192 +1,220 @@
-# 🎵 Vinyl Recommendations
+# Olymp – Self-Hosted Home Server Infrastructure
 
-Empfiehlt Schallplatten aus einer persönlichen Sammlung basierend auf Stimmung, Anlass und verfügbarer Hörzeit. Powered by Ollama (Llama 3).
+A fully self-hosted, security-hardened home server running on a Lenovo ThinkCentre M920q. Features a custom-built monitoring dashboard, encrypted external storage, VPN remote access, IoT network segmentation, and a two-tier authentication system.
 
-Das System lernt durch Nutzerfeedback und verbessert seine Empfehlungen über die Zeit. Bei negativer Stimmung werden automatisch zwei Varianten angeboten: Musik die die Stimmung spiegelt, und Musik die aufheitert.
+Built from scratch as a hands-on learning project in Linux system administration, networking, containerization, and full-stack development.
+
+![Dashboard Login](docs/screenshots/login.png)
 
 ---
+
+## Architecture
+
+```
+Internet (Dynamic IP via DDNS)
+  │
+  │  DDNS: *.duckdns.org
+  │
+ISP Router (Bridge/DMZ mode)
+  │
+Aigis – Ubiquiti Cloud Gateway Ultra
+  │  WireGuard VPN Server (Port 51820)
+  │  Inter-VLAN Firewall Rules
+  │
+  ├── Main LAN (192.168.0.0/24)
+  │     └── Olymp Server (192.168.0.10)
+  │           ├── Port 8000: Olymp Dashboard (Docker)
+  │           └── Port 8001: Pallas App (Docker)
+  │
+  ├── IoT VLAN (192.168.20.0/24, VLAN 20)
+  │     └── Isolated – No internet, no LAN access
+  │
+  └── VPN Subnet (192.168.2.0/24)
+        └── Remote access from anywhere
+```
+
+## Security Layers
+
+| Layer | Implementation |
+|---|---|
+| Disk Encryption | LUKS full-disk encryption (internal SSD + external vault) |
+| SSH Hardening | Key-only auth, custom port, no root login, no password auth |
+| Firewall | UFW with strict allow-list |
+| Brute-Force Protection | fail2ban (3 attempts → 1h ban) |
+| Auto-Updates | unattended-upgrades for security patches |
+| BIOS Lock | Password protected, USB/network boot disabled |
+| VPN | WireGuard tunnel via gateway (no exposed SSH port) |
+| Network Segmentation | IoT VLAN isolated from main LAN |
+| App-Level Auth | Two-tier bcrypt + JWT authentication |
+| CORS | Restricted to LAN/VPN subnets only |
+
+## Dashboard
+
+A custom-built monitoring dashboard with two-tier authentication:
+
+**Tier 1 – Dashboard Login:**
+- Protects all dashboard views (system stats, Docker, network)
+- bcrypt password hashing (cost factor 12)
+- JWT tokens in httponly cookies (XSS-safe)
+- Rate limiting: 5 failed attempts → 15 min lockout
+- 8-hour session duration
+
+**Tier 2 – Vault Access:**
+- Separate password for the encrypted file manager
+- 15-minute auto-lock with countdown timer
+- Visual warnings (green → yellow → red) as session expires
+
+### Features
+
+- **System Monitor** – CPU, RAM, temperature, disk usage (live polling)
+- **Docker Overview** – Container status, images, ports
+- **Network Info** – Interface IPs, VPN status
+- **Server Inventory** – Hardware specs, installed services, Docker containers
+- **File Manager** – Browse, upload (drag & drop), download, rename, delete files on encrypted vault
+- **File Preview** – View images and text files directly in the browser
+- **Theme System** – HUD (futuristic cyan) and Professional (clean teal) themes
 
 ## Tech Stack
 
-| Komponente | Technologie |
-|------------|-------------|
-| Backend | Python 3.13 |
-| Datenbank | SQLite |
-| LLM | Ollama / Llama 3 (8B, lokal) |
-| API | FastAPI + Uvicorn |
-| Frontend | HTML / CSS / JS (in Entwicklung) |
-| Versionierung | Git / GitHub |
-| Daten | Externe SSD (T7_ML) |
+### Server
+- **OS:** Ubuntu Server 24.04 LTS
+- **Containers:** Docker + Docker Compose v2
+- **VPN:** WireGuard (via Ubiquiti gateway)
+- **DDNS:** DuckDNS (5-min cron update)
+- **Monitoring:** fail2ban, UFW
 
----
+### Dashboard Backend
+- **Framework:** FastAPI (Python 3.12)
+- **Auth:** bcrypt + PyJWT
+- **Architecture:** Routers → Services → Models (clean separation)
+- **Container:** Python 3.12-slim Docker image
 
-## Setup
+### Dashboard Frontend
+- **Framework:** React 18 + TypeScript
+- **Build Tool:** Vite
+- **Styling:** Tailwind CSS v4 + Custom CSS Properties (Pallas Design System)
+- **Themes:** Dual theme support via CSS custom properties
 
-### Voraussetzungen
+### Networking
+- **Gateway:** Ubiquiti Cloud Gateway Ultra
+- **Access Point:** Ubiquiti U7 Lite
+- **VPN:** WireGuard (multi-client: laptop + mobile)
+- **VLANs:** Main LAN + IoT (isolated)
 
-- Python 3.11+
-- [Ollama](https://ollama.com) installiert
-- Llama 3 Modell gepullt: `ollama pull llama3`
+## Project Structure
 
-### Installation
+```
+olymp-dashboard/
+├── app/
+│   ├── main.py                  # FastAPI app + router registration
+│   ├── config.py                # Settings, paths, env variables
+│   ├── routers/
+│   │   ├── auth.py              # Login, vault unlock, logout, status
+│   │   ├── system.py            # Health, system stats, inventory
+│   │   ├── docker.py            # Container overview
+│   │   ├── network.py           # Network interfaces
+│   │   └── files.py             # File CRUD, upload, download, preview
+│   ├── services/
+│   │   ├── auth_service.py      # bcrypt verification, JWT, rate limiting
+│   │   ├── system_service.py    # CPU, RAM, disk, temperature
+│   │   ├── inventory_service.py # Hardware, containers, services
+│   │   ├── docker_service.py    # Docker socket communication
+│   │   ├── network_service.py   # Network interface data
+│   │   └── file_service.py      # Secure file operations
+│   ├── middleware/
+│   │   └── auth.py              # FastAPI dependencies (require_dashboard, require_vault)
+│   └── models/
+│       └── schemas.py           # Pydantic models
+├── frontend-dist/               # Built React frontend (served by FastAPI)
+├── scripts/
+│   └── setup_auth.py            # Interactive password setup (passwords never touch disk)
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+└── .gitignore
+```
 
+## Getting Started
+
+### Prerequisites
+- Linux server (tested on Ubuntu 24.04 LTS)
+- Docker + Docker Compose v2
+- Node.js 18+ (for building frontend)
+- Python 3.12+
+
+### 1. Clone the repository
 ```bash
-# Repository klonen
-git clone https://github.com/NoahRolli/vinylRec.git
-cd vinylrecommendations
-
-# Virtuelle Umgebung erstellen und aktivieren
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Abhängigkeiten installieren
-pip install -r requirements.txt
-
-# .env Datei erstellen (siehe .env.example)
-cp .env.example .env
-
-# Datenbank erstellen
-python -m services.db_setup
+git clone https://github.com/NoahRolli/olymp.git
+cd olymp
 ```
 
-### Starten
-
+### 2. Set up authentication
 ```bash
-# CLI starten
-python cli.py
+sudo python3 scripts/setup_auth.py
+```
+This interactively prompts for two passwords (dashboard + vault). Passwords are hashed with bcrypt and stored in `/etc/olymp/auth.json` with `600` permissions. **No plaintext passwords ever touch disk.**
 
-# API starten
-uvicorn main:app --reload
-# API Docs: http://localhost:8000/docs
+### 3. Build the frontend
+```bash
+cd frontend
+npm install
+npm run build
+cp -r dist/* ../frontend-dist/
+cd ..
 ```
 
----
-
-## Features
-
-- **Schallplattenempfehlung** — Beschreibe Stimmung, Anlass und Hörzeit, das LLM empfiehlt passende Platten aus deiner Sammlung
-- **Stimmungscheck** — Bei negativer Stimmung werden zwei Optionen angeboten: Stimmung spiegeln oder heben
-- **Feedback-System** — Bewerte Empfehlungen, das System lernt für zukünftige Vorschläge
-- **Sammlungsverwaltung** — Platten hinzufügen, bearbeiten und löschen (CRUD)
-- **Ladeanimation** — Spinner zeigt an, dass Ollama arbeitet
-- **REST API** — FastAPI-Endpunkte für zukünftiges Web-Frontend
-
----
-
-## Projektstruktur
-
-```
-vinylrecommendations/
-├── core/                    # Geschäftslogik
-│   ├── models.py            # Vinyl-Datenmodell
-│   └── recommender.py       # Prompt Engineering + Empfehlungslogik
-├── services/                # Externe Anbindungen
-│   ├── cli.py               # Menüführung + Nutzereingaben
-│   ├── collection_manager.py # CRUD-Operationen
-│   ├── data_loader.py       # SQLite → Vinyl-Objekte
-│   ├── db_setup.py          # Datenbank erstellen
-│   ├── feedback_manager.py  # Feedback speichern + laden
-│   ├── llm.py               # Ollama HTTP-Kommunikation
-│   └── spinner.py           # Ladeanimation
-├── infra/                   # Konfiguration
-│   └── settings.py          # Pfade, Ollama-Config
-├── frontend/                # Web-Interface (in Entwicklung)
-│   ├── css/style.css
-│   ├── js/app.js
-│   └── index.html
-├── test/                    # Tests
-├── main.py                  # FastAPI Server
-├── cli.py                   # CLI Einstiegspunkt
-├── .env.example             # Umgebungsvariablen Vorlage
-├── requirements.txt         # Python-Abhängigkeiten
-└── README.md
+### 4. Start the dashboard
+```bash
+docker compose up -d --build
 ```
 
----
+### 5. Access
+- Local: `http://<server-ip>:8000`
+- Remote: Connect via WireGuard VPN, then same URL
 
-## Architektur
+## Security Notes
 
-```mermaid
-graph TD
-    CLI[cli.py<br/>CLI Interface] --> CORE
-    API[main.py<br/>FastAPI Server] --> CORE
-    
-    subgraph CORE[core/]
-        MODELS[models.py<br/>Vinyl-Klasse]
-        REC[recommender.py<br/>Prompt + Empfehlung]
-    end
-    
-    subgraph SERVICES[services/]
-        LLM[llm.py<br/>Ollama HTTP]
-        DL[data_loader.py<br/>DB lesen]
-        CM[collection_manager.py<br/>CRUD]
-        FM[feedback_manager.py<br/>Feedback]
-        SPIN[spinner.py<br/>Animation]
-    end
-    
-    subgraph INFRA[infra/]
-        SETTINGS[settings.py<br/>Config + Pfade]
-    end
-    
-    REC --> LLM
-    REC --> FM
-    DL --> MODELS
-    CM --> MODELS
-    
-    LLM --> OLLAMA[(Ollama<br/>Llama 3)]
-    DL --> DB[(SQLite<br/>vinyl_collection.db)]
-    CM --> DB
-    FM --> DB
-    SETTINGS --> DL
-    SETTINGS --> LLM
-```
+- Auth hashes are stored in `/etc/olymp/auth.json` (not in the repo)
+- JWT secrets are generated cryptographically during setup
+- Passwords are input via `getpass` (no echo, no shell history)
+- The vault (encrypted external SSD) requires manual unlock after each server reboot
+- All API routes are protected; unauthenticated requests receive `401`/`403`
+- File operations are sandboxed – path traversal outside the vault is blocked
 
----
+## Naming Convention
 
-## API Endpunkte
+All components follow a Greek/Roman mythology naming scheme:
 
-| Methode | Endpunkt | Beschreibung |
-|---------|----------|--------------|
-| GET | `/api/collection` | Gesamte Sammlung abrufen |
-| POST | `/api/collection` | Neue Platte hinzufügen |
-| DELETE | `/api/collection/{id}` | Platte löschen |
-| POST | `/api/recommend` | Empfehlung generieren |
-| POST | `/api/feedback` | Feedback speichern |
-| GET | `/api/feedback` | Feedbacks abrufen |
-
----
-
-## Nützliche Befehle
-
-| Was | Befehl |
-|-----|--------|
-| CLI starten | `python cli.py` |
-| API starten | `uvicorn main:app --reload` |
-| venv aktivieren | `source .venv/bin/activate` |
-| DB neu erstellen | `python -m services.db_setup` |
-| DB prüfen | `sqlite3 data/vinyl_collection.db "SELECT * FROM vinyl;"` |
-| Ollama starten | `ollama serve` |
-| Modell pullen | `ollama pull llama3` |
-| Dependencies | `pip install -r requirements.txt` |
-
----
+| Name | Component |
+|---|---|
+| Olymp | Home server (Lenovo ThinkCentre M920q) |
+| Aigis | Network gateway (Ubiquiti Cloud Gateway Ultra) |
+| Tresor | Encrypted external SSD (Samsung T7 Shield) |
+| Prometheus | Server username |
+| Hermes | VPN client (laptop) |
+| Pallas | Personal app + MacBook |
 
 ## Roadmap
 
-- [x] CLI mit Menüführung
-- [x] SQLite Datenbank
-- [x] Ollama Integration
-- [x] Sammlungsverwaltung (CRUD)
-- [x] Feedback-System
-- [x] Stimmungscheck
-- [x] FastAPI Endpunkte
-- [ ] Kaufempfehlungen (Discogs API)
-- [ ] Web-Frontend (HTML/CSS/JS)
-- [ ] Unit Tests
-- [ ] Web-Interface (React Migration)
+- [x] Ubuntu Server with LUKS full-disk encryption
+- [x] SSH hardening + fail2ban + UFW
+- [x] Docker containerization
+- [x] WireGuard VPN remote access
+- [x] IoT VLAN with firewall isolation
+- [x] DDNS (DuckDNS)
+- [x] Dashboard with system monitoring
+- [x] Two-tier authentication (bcrypt + JWT)
+- [x] File Manager with upload, download, rename, preview
+- [x] Server inventory display
+- [ ] Zigbee2MQTT integration (IKEA Kajplats smart lighting)
+- [ ] Docker container start/stop via dashboard
+- [ ] Log viewer in dashboard
+- [ ] System alerts (temperature, disk space)
+
+## License
+
+This project is for personal and educational use. Feel free to use it as inspiration for your own homelab setup.
 
 ---
 
-## Lizenz
-
-Privates Projekt.
+*Built with curiosity, caffeine, and a Lenovo ThinkCentre M920q.*
