@@ -1,0 +1,13 @@
+services:
+  dashboard-api:
+    build: .
+    container_name: olymp-dashboard
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /mnt/tresor:/mnt/tresor
+      - ./frontend-dist:/frontend:ro
+      - /etc/olymp:/etc/olymp:ro
+    privileged: false

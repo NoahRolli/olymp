@@ -1,0 +1,55 @@
+# === Secrets & Auth ===
+/etc/olymp/
+auth.json
+auth.json.bak
+*.secret
+*.key
+*.pem
+
+# === Environment ===
+.env
+.env.local
+.env.production
+
+# === Node / Frontend ===
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend-dist/
+*.tgz
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# === Docker ===
+.docker/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# === IDE ===
+.vscode/
+.idea/
+*.code-workspace
+
+# === Logs ===
+*.log
+logs/
+
+# === Handoff documents with secrets ===
+Olymp_Handoff_Komplett.md
+Olymp_Gesamtstatus.md
+Pallas_Olymp_Deployment_Handoff.md
+
+# === DuckDNS ===
+duck.log
+duckdns/
